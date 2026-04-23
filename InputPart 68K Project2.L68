@@ -1,0 +1,166 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 4/23/2026 1:08:02 AM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      : Parameter Passing Example for 68k
+00000000                             3  * Written by : Oyindamola Olaosun
+00000000                             4  * Date       : 20th April 2026
+00000000                             5  * Description: Demonstrates passing parameters using registers and stack, performing arithmetic operations,
+00000000                             6  *              and running a loop to keep a running sum.
+00000000                             7  *              Highlights security vulnerabilities related to stack handling, input validation and memory access.
+00000000                             8  *-----------------------------------------------------------
+00000000                             9  
+00001000                            10      ORG    $1000
+00001000                            11  START:              ;will be the linker in x86 assembly
+00001000  4283                      12      CLR.L D3        ;Running sum initialized to 0
+00001002  383C 0003                 13      MOVE.W #3, D4   ;Loop counter set to 3
+00001006                            14      
+00001006                            15      ;CLR.L is the instruction used to clear an entire 32-bit long-word at a specific destination, setting its value to zero.
+00001006                            16      
+00001006                            17  GAME_LOOP:
+00001006                            18      *Input two numbers and add them using REGISTER_ADDER subroutine
+00001006                            19      
+00001006                            20      ;First number
+00001006  103C 000E                 21      MOVE.B #14, D0  ;Task 14: Display string
+0000100A  43F9 000010FC             22      LEA PROMPT, A1  ;Load address of prompt string
+00001010  6100 009E                 23      BSR VALIDATE_A1   ;Validate before the trap
+00001014  4E4F                      24      TRAP #15     
+00001016                            25      
+00001016                            26      
+00001016  103C 0004                 27      MOVE.B #4, D0   ;Task 4: Read number
+0000101A  4E4F                      28      TRAP #15        ;Execute system call
+0000101C                            29      ;Input validation, prevents negative values
+0000101C  B2BC 00000000             30      CMP.L #0, D1
+00001022  6D00 007C                 31      BLT INVALID_INPUT
+00001026  B2BC 000003E8             32      CMP.L #1000, D1
+0000102C  6E00 0072                 33      BGT INVALID_INPUT
+00001030  2401                      34      MOVE.L D1, D2   ;Store first number in D2
+00001032                            35      
+00001032                            36      ;Second number
+00001032  103C 000E                 37      MOVE.B #14, D0
+00001036  43F9 000010FC             38      LEA PROMPT,A1
+0000103C  6100 0072                 39      BSR VALIDATE_A1 ;Validate before the trap
+00001040  4E4F                      40      TRAP #15
+00001042                            41      
+00001042  103C 0004                 42      MOVE.B #4, D0
+00001046  4E4F                      43      TRAP #15    
+00001048                            44      ;Input Validation
+00001048  B2BC 00000000             45      CMP.L #0, D1
+0000104E  6D00 0050                 46      BLT INVALID_INPUT
+00001052  B2BC 000003E8             47      CMP.L #1000, D1
+00001058  6E00 0046                 48      BGT INVALID_INPUT
+0000105C                            49       
+0000105C                            50      ;Add numbers together
+0000105C  6100 0088                 51      BSR REGISTER_ADDER ;Call subroutine (D1 = D1 + D2)
+00001060  D681                      52      ADD.L D1, D3  ;Add result to running sum
+00001062  6900 0072                 53      BVS OVERFLOW_HANDLER
+00001066                            54      
+00001066                            55      ;The sum is: 
+00001066  103C 000E                 56      MOVE.B #14, D0
+0000106A  43F9 0000110B             57      LEA RESULT, A1
+00001070  6100 003E                 58      BSR VALIDATE_A1
+00001074  4E4F                      59      TRAP #15
+00001076                            60      
+00001076                            61      ;prints what is in D1
+00001076  103C 0003                 62      MOVE.B #3, D0
+0000107A  4E4F                      63      TRAP #15
+0000107C                            64      
+0000107C  6100 006E                 65      BSR NEW_LINE
+00001080                            66      
+00001080                            67      *Decrement loop counter and repeat if not zero
+00001080  5344                      68      SUBQ.W #1, D4 ;Subtract 1 from the lower 16 bits of register D4
+00001082  6682                      69      BNE GAME_LOOP ;If D4 is not zero, jump back to the label GAME_LOOP. If it is zero, continue to the next line of code.
+00001084                            70      
+00001084                            71      ;After the loop ends
+00001084                            72      *Display final sum
+00001084  103C 000E                 73      MOVE.B #14, D0
+00001088  43F9 00001118             74      LEA FINAL_RESULT, A1
+0000108E  6100 0020                 75      BSR VALIDATE_A1 ;Validate again for the new address
+00001092  4E4F                      76      TRAP #15
+00001094  2203                      77      MOVE.L D3, D1
+00001096  103C 0003                 78      MOVE.B #3, D0
+0000109A  4E4F                      79      TRAP #15
+0000109C                            80      
+0000109C  FFFF FFFF                 81      SIMHALT
+000010A0                            82  
+000010A0                            83  * Put program code here
+000010A0                            84  INVALID_INPUT:
+000010A0  43F9 0000112A             85      LEA ERR_MSG, A1
+000010A6  103C 000E                 86      MOVE.B #14, D0
+000010AA  4E4F                      87      TRAP #15
+000010AC  6000 FF58                 88      BRA GAME_LOOP
+000010B0                            89  
+000010B0                            90  VALIDATE_A1:
+000010B0  B3FC 000010FC             91          CMPA.L #DATA_START, A1
+000010B6  6500 000E                 92          BLO ACCESS_VIOLATION
+000010BA  B3FC 0000117F             93          CMPA.L #DATA_END, A1
+000010C0  6200 0004                 94          BHI ACCESS_VIOLATION
+000010C4  4E75                      95          RTS
+000010C6                            96          
+000010C6                            97  ACCESS_VIOLATION:
+000010C6                            98      ;Print error and kill program
+000010C6  43F9 0000112A             99      LEA ERR_MSG, A1
+000010CC  103C 000E                100      MOVE.B #14, D0
+000010D0  4E4F                     101      TRAP #15
+000010D2  FFFF FFFF                102      SIMHALT
+000010D6                           103      
+000010D6                           104  OVERFLOW_HANDLER:
+000010D6  43F9 00001152            105      LEA MATH_ERR, A1
+000010DC  103C 000E                106      MOVE.B #14, D0
+000010E0  4E4F                     107      TRAP #15
+000010E2  FFFF FFFF                108      SIMHALT
+000010E6                           109      
+000010E6                           110      
+000010E6                           111  *-----------
+000010E6                           112  *Add numbers using register parameters
+000010E6                           113  REGISTER_ADDER:
+000010E6  D282                     114      ADD.L D2, D1
+000010E8  69EC                     115      BVS OVERFLOW_HANDLER
+000010EA  4E75                     116      RTS             ;Return from subroutine
+000010EC                           117  
+000010EC                           118  *Subroutine to display Carriage Return and Line Feed
+000010EC                           119  NEW_LINE:
+000010EC  103C 000E                120      MOVE.B #14, D0
+000010F0  43F9 00001127            121      LEA CRLF, A1
+000010F6  61B8                     122      BSR VALIDATE_A1
+000010F8  4E4F                     123      TRAP #15
+000010FA  4E75                     124      RTS
+000010FC                           125      
+000010FC                           126  *Strings
+000010FC                           127  DATA_START:      ;Label at the beginning of your strings
+000010FC= 45 6E 74 65 72 20 ...    128  PROMPT DC.B 'Enter number: ', 0
+0000110B= 54 68 65 20 73 75 ...    129  RESULT DC.B 'The sum is: ', 0
+00001118= 46 69 6E 61 6C 20 ...    130  FINAL_RESULT DC.B 'Final sum is: ', 0
+00001127= 0D 0A 00                 131  CRLF DC.B $D, $A,0
+0000112A= 53 65 63 75 72 69 ...    132  ERR_MSG DC.B 'Security Error: Memory Access Violation', 0
+00001152= 53 65 63 75 72 69 ...    133  MATH_ERR DC.B 'Security Error: Arithmetic Overflow Detected', 0
+0000117F                           134  DATA_END:         ;Label at the very end
+0000117F                           135  
+0000117F                           136  * Put variables and constants here
+0000117F                           137  
+0000117F                           138      END    START        ; last line of source
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+ACCESS_VIOLATION    10C6
+CRLF                1127
+DATA_END            117F
+DATA_START          10FC
+ERR_MSG             112A
+FINAL_RESULT        1118
+GAME_LOOP           1006
+INVALID_INPUT       10A0
+MATH_ERR            1152
+NEW_LINE            10EC
+OVERFLOW_HANDLER    10D6
+PROMPT              10FC
+REGISTER_ADDER      10E6
+RESULT              110B
+START               1000
+VALIDATE_A1         10B0
