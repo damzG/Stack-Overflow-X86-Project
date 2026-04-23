@@ -4,7 +4,7 @@
 Demonstrates passing parameters using registers and stack, performing arithmetic operations and running a loop to keep
 a running sum.
 
-68K Source Code
+# 68K Source Code
 This program:
 Runs a loop 3 times
 Each time:
@@ -27,7 +27,19 @@ Arithmetic Overflow
 No overflow detection and could wrap around silently
 Fix: BVS checks for signed overflow, the 'branches' to a overflow handler
 
-# Vulnerability 4
-No Stack Protection
+# x86_64
+Mapping to x86_64
+D1  ----> RAX/RDI/RSI
+D2  ---->  RBX/RDX
+D3  ---->  RCX
+A1  ----> RDI
+
+68k 
+BSR FUNC:
+RTS
+
+x86_64
+call func
+ret
 Return address is pushed to stack
 RTS Pops it
