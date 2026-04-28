@@ -1,3 +1,7 @@
+//Name: Oyindamola Olaosun
+//Date: 29th April, 2026
+//Description: Test script file for add number method
+
 #include <stdio.h>
 #include <assert.h>
 
