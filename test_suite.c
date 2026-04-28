@@ -1,3 +1,7 @@
+//Name: Oyindamola Olaosun
+//Date: 29th April, 2026
+//Description: Test script c file for ATOI routine to check inputs (invalid inputs)
+
 #include <stdio.h>
 #include <assert.h>
 
