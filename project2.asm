@@ -4,373 +4,659 @@
 ; ============================================================
 ; Author: Oyindamola Olaosun
 ; Date: 29th April 2026
-; Description: 
-;   - Loops 3 times asking for two numbers each iteration
-;   - Adds numbers with proper input validation
-;   - Detects integer overflow
-;   - Keeps a running sum and displays final result
+;
+; Program Description:
+;   - Loops 3 times, reading two numbers per iteration
+;   - Validates input using ATOI function
+;   - Adds two numbers with overflow detection
+;   - Maintains a running sum across all iterations
+;   - Displays iteration results and final accumulated sum
+;
+; Key Features:
+;   * Input validation (bounds checking: -1000 to 1000)
+;   * Integer overflow detection using CPU flags
+;   * Secure stack alignment
+;   * Non-executable stack (GNU-stack standard)
 ; ============================================================
 
-; ============================================================
-; x86_64 VERSION (ALIGNED WITH 68k STRUCTURE)
-; ============================================================
 
-global ATOI_testable
+; ============================================================
+; DATA SECTION - String Constants and Messages
+; ============================================================
 
 section .data
-    PROMPT db "Enter number: ", 0
-    PROMPT_LEN equ $-PROMPT
+    ; User prompts
+    PROMPT          db "Enter number: ", 0
+    PROMPT_LEN      equ $-PROMPT
 
-    RESULT db "The sum is: ", 0
-    RESULT_LEN equ $-RESULT
+    ; Output messages
+    RESULT          db "The sum is: ", 0
+    RESULT_LEN      equ $-RESULT
 
-    FINAL_RESULT db "Final sum is: ", 0
-    FINAL_LEN equ $-FINAL_RESULT
+    FINAL_RESULT    db "Final sum is: ", 0
+    FINAL_LEN       equ $-FINAL_RESULT
 
-    ERR_MSG db "Invalid input", 10
-    ERR_LEN equ $-ERR_MSG
+    ; Error messages
+    ERR_MSG         db "Invalid input", 10
+    ERR_LEN         equ $-ERR_MSG
 
-    OVERFLOW_MSG db "Overflow detected", 10
-    OVERFLOW_LEN equ $-OVERFLOW_MSG
+    OVERFLOW_MSG    db "Overflow detected", 10
+    OVERFLOW_LEN    equ $-OVERFLOW_MSG
 
-    CRLF db 10
+    ; Line feed character
+    CRLF            db 10
+
+
+; ============================================================
+; BSS SECTION - Uninitialized Data (Runtime Buffers)
+; ============================================================
 
 section .bss
-    input_buffer resb 64   ; for reading user input (ATOI)
-    output_buffer resb 64  ; for printing numbers (PRINT_NUMBER)
+    input_buffer    resb 64         ; Buffer for reading user input
+    output_buffer   resb 64         ; Buffer for converting numbers to strings
+
+
+; ============================================================
+; TEXT SECTION - Executable Code
+; ============================================================
 
 section .text
     global _start
-    ;global asm_main 
+    global ATOI_testable
+    global ATOI_C_Wrapper
+    global test_add_wrapper
 
-;asm_main:
+
+; ============================================================
+; MAIN PROGRAM ENTRY POINT
+; ============================================================
+
 _start:
-    xor rbx, rbx        ; running sum = 0
-    mov r8d, 3          ; loop counter
+    ; Initialize registers
+    xor rbx, rbx                    ; RBX = running sum (accumulated across iterations)
+    mov r8d, 3                      ; R8D = loop counter (3 iterations)
+
+
+; ============================================================
+; MAIN LOOP - Execute 3 times
+; ============================================================
 
 GAME_LOOP:
-    ; ---- CLEAR INPUT BUFFER ----
+    ; ---- Iteration Setup ----
+    mov byte [input_buffer], 0      ; Clear input buffer for first number
+
+
+    ; ====== READ FIRST NUMBER ======
+
+    ; Print prompt for first number
+    mov rax, 1                      ; Syscall: write
+    mov rdi, 1                      ; File descriptor: stdout
+    mov rsi, PROMPT                 ; Address of prompt string
+    mov rdx, PROMPT_LEN             ; Length of prompt
+    syscall
+
+
+    ; Read input from user (stdin)
+    mov rax, 0                      ; Syscall: read
+    mov rdi, 0                      ; File descriptor: stdin
+    mov rsi, input_buffer           ; Address to store input
+    mov rdx, 32                     ; Max bytes to read
+    syscall
+    mov r12, rax                    ; R12 = bytes read (for reference)
+
+
+    ; Parse first number using ATOI function
+    mov rsi, input_buffer           ; Load input buffer address
+    call ATOI_testable              ; Convert ASCII to integer
+    test rdi, rdi                   ; Check error flag (rdi: 0=success, 1=error)
+    jnz INVALID_INPUT_HANDLER       ; If error, handle invalid input
+
+
+    ; Validate first number is within acceptable range [-1000, 1000]
+    cmp rax, -1000
+    jl INVALID_INPUT_HANDLER        ; If less than -1000, error
+    cmp rax, 1000
+    jg INVALID_INPUT_HANDLER        ; If greater than 1000, error
+
+    mov r9, rax                     ; R9 = first number (save for ADD_NUMBERS)
+
+
+    ; ====== READ SECOND NUMBER ======
+
+    ; Clear input buffer for second number
     mov byte [input_buffer], 0
 
-    ; ---- PRINT PROMPT ----
-    mov rax, 1
-    mov rdi, 1
-    mov rsi, PROMPT
-    mov rdx, PROMPT_LEN
+
+    ; Print prompt for second number
+    mov rax, 1                      ; Syscall: write
+    mov rdi, 1                      ; File descriptor: stdout
+    mov rsi, PROMPT                 ; Address of prompt string
+    mov rdx, PROMPT_LEN             ; Length of prompt
     syscall
 
-    ; ---- READ FIRST NUMBER ----
-    mov rax, 0
-    mov rdi, 0
-    mov rsi, input_buffer
-    mov rdx, 32
+
+    ; Read second input from user
+    mov rax, 0                      ; Syscall: read
+    mov rdi, 0                      ; File descriptor: stdin
+    mov rsi, input_buffer           ; Address to store input
+    mov rdx, 32                     ; Max bytes to read
     syscall
-    mov r12, rax        ; SAVE byte count in r12
+    mov r12, rax                    ; R12 = bytes read
 
-    ; Parse first number
-    mov rsi, input_buffer
-    call ATOI_testable
-    test rdi, rdi ; Better way to check error flag
-    jnz INVALID_INPUT_HANDLER
 
-    ; Bounds check
+    ; Parse second number using ATOI function
+    mov rsi, input_buffer           ; Load input buffer address
+    call ATOI_testable              ; Convert ASCII to integer
+    test rdi, rdi                   ; Check error flag
+    jnz INVALID_INPUT_HANDLER       ; If error, handle invalid input
+
+
+    ; Validate second number is within acceptable range
     cmp rax, -1000
     jl INVALID_INPUT_HANDLER
     cmp rax, 1000
     jg INVALID_INPUT_HANDLER
 
-    mov r9, rax         ; SAVE FIRST NUMBER IN r9
+    mov r10, rax                    ; R10 = second number (save for ADD_NUMBERS)
 
-    ; ---- CLEAR INPUT BUFFER ----
-    mov byte [input_buffer], 0
 
-    ; ---- PRINT PROMPT ----
-    mov rax, 1
-    mov rdi, 1
-    mov rsi, PROMPT
-    mov rdx, PROMPT_LEN
-    syscall
+    ; ====== ADD THE TWO NUMBERS ======
 
-    ; ---- READ SECOND NUMBER ----
-    mov rax, 0
-    mov rdi, 0
-    mov rsi, input_buffer
-    mov rdx, 32
-    syscall
-    mov r12, rax        ; SAVE byte count
+    mov rdi, r9                     ; RDI = first number (function parameter)
+    mov rsi, r10                    ; RSI = second number (function parameter)
+    call ADD_NUMBERS                ; Call addition with overflow detection
+    jc OVERFLOW_HANDLER             ; Jump if carry flag set (overflow occurred)
 
-    mov rsi, input_buffer
-    call ATOI_testable
-    test rdi, rdi
-    jnz INVALID_INPUT_HANDLER ; Jump to the handler if rdi != 0
+    mov r13, rax                    ; R13 = sum of current iteration
 
-    cmp rax, -1000
-    jl INVALID_INPUT_HANDLER
-    cmp rax, 1000
-    jg INVALID_INPUT_HANDLER
 
-    mov r10, rax        ; SAVE SECOND NUMBER IN r10
+    ; ====== DISPLAY ITERATION RESULT ======
 
-    ; ---- ADD THEM ----
-    mov rdi, r9         ; First number
-    mov rsi, r10        ; Second number
-    call ADD_NUMBERS
-    jc OVERFLOW_HANDLER ;Jump if Carry flag is set (our error signal)
-
-    mov r13, rax  ;Use r13 (preserved across syscalls)
-
-    ; ---- PRINT RESULT ----
+    ; Print "The sum is: " message
     mov rsi, RESULT
     mov rdx, RESULT_LEN
     call PRINT_STRING
 
-    mov rax, r13       ; Load sum for printing
+
+    ; Print the calculated sum
+    mov rax, r13                    ; Load sum into RAX for printing
     call PRINT_NUMBER
+
+
+    ; Print newline after result
     call NEW_LINE
 
-    ; ---- ADD TO RUNNING SUM ----
-    add rbx, r13        ; rbx += current iteration sum
 
-    ; ---- LOOP CONTROL ----
-    dec r8d             ; Decrement loop counter
-    jnz GAME_LOOP
+    ; ====== ADD TO RUNNING TOTAL ====
 
-    ; ---- FINAL RESULT ----
+    add rbx, r13                    ; RBX (running sum) += current iteration sum
+
+
+    ; ====== LOOP CONTROL ====
+
+    dec r8d                         ; Decrement loop counter
+    jnz GAME_LOOP                   ; If counter != 0, repeat loop
+
+
+    ; ============================================================
+    ; POST-LOOP: DISPLAY FINAL RESULT
+    ; ============================================================
+
+    ; Print "Final sum is: " message
     mov rsi, FINAL_RESULT
     mov rdx, FINAL_LEN
     call PRINT_STRING
 
-    mov rax, rbx        ; Load running sum
+
+    ; Print the accumulated sum across all iterations
+    mov rax, rbx                    ; Load running sum into RAX for printing
     call PRINT_NUMBER
+
+
+    ; Print newline after final result
     call NEW_LINE
 
-    ; Exit
-    mov rax, 60
-    xor rdi, rdi
+
+    ; ====== PROGRAM EXIT ====
+
+    mov rax, 60                     ; Syscall: exit
+    xor rdi, rdi                    ; Exit code: 0 (success)
     syscall
 
-; =========================
+
+; ============================================================
 ; HELPER FUNCTIONS
-; =========================
+; ============================================================
+
+
+; ============================================================
+; FUNCTION: PRINT_STRING
+; ============================================================
+; Purpose: Output a string to stdout using syscall
+; Input:   RSI = pointer to string
+;          RDX = length of string
+; Output:  None
+; Modifies: RAX, RDI, RSI, RDX (syscall clobbered)
+; ============================================================
 
 PRINT_STRING:
-    mov rax, 1
-    mov rdi, 1
-    syscall
+    mov rax, 1                      ; Syscall: write
+    mov rdi, 1                      ; File descriptor: stdout
+    syscall                         ; Execute syscall (RSI and RDX already set)
     ret
+
+
+; ============================================================
+; FUNCTION: NEW_LINE
+; ============================================================
+; Purpose: Output a single newline character
+; Input:   None
+; Output:  None
+; Modifies: RAX, RDI, RSI, RDX (syscall clobbered)
+; ============================================================
 
 NEW_LINE:
-    mov rax, 1
-    mov rdi, 1
-    mov rsi, CRLF
-    mov rdx, 1
+    mov rax, 1                      ; Syscall: write
+    mov rdi, 1                      ; File descriptor: stdout
+    mov rsi, CRLF                   ; Address of newline character
+    mov rdx, 1                      ; Write 1 byte
     syscall
     ret
 
-; ATOI - Parse string in buffer to integer
-; Input: rsi = input_buffer
-; Output: rax = number, rdi = error flag (0=success, 1=error)
+
+; ============================================================
+; FUNCTION: ATOI_testable
+; ============================================================
+; Purpose: Convert null-terminated ASCII string to integer
+;
+; Input:   RSI = pointer to input string
+;
+; Output:  RAX = converted integer value
+;          RDI = error flag (0 = success, 1 = error)
+;
+; Behavior:
+;   - Handles optional leading minus sign
+;   - Stops parsing at newline, carriage return, or null terminator
+;   - Validates all characters are digits
+;   - Returns error if string is empty or contains non-digits
+;
+; Register Preservation: RBP (push/pop)
+; Local Registers: R14 (sign flag: 0=positive, 1=negative)
+; ============================================================
+
 ATOI_testable:
     push rbp
     mov rbp, rsp
-    push r14        ; Use R14 as our sign flag instead of RBP
-    xor rax, rax
-    xor rcx, rcx
-    xor rdi, rdi
-    xor r14, r14    ; 0 = positive
+    push r14                        ; Save R14 for sign flag
 
-    mov dl, [rsi]
-    cmp dl, '-'
-    jne .convert
-    mov r14, 1      ; Mark as negative
-    inc rcx
+    ; Initialize working registers
+    xor rax, rax                    ; RAX = result (start at 0)
+    xor rcx, rcx                    ; RCX = string index
+    xor rdi, rdi                    ; RDI = error flag (0 = no error)
+    xor r14, r14                    ; R14 = sign flag (0 = positive)
+
+
+    ; ---- Check for leading minus sign ----
+
+    mov dl, [rsi]                   ; Load first character
+    cmp dl, '-'                     ; Is it a minus sign?
+    jne .convert                    ; No, skip sign handling
+
+
+    mov r14, 1                      ; Yes, set sign flag to negative
+    inc rcx                         ; Move past the minus sign
+
+
+    ; ---- Convert ASCII digits to integer ----
 
 .convert:
-    mov dl, [rsi + rcx]
-    cmp dl, 10
+    mov dl, [rsi + rcx]             ; Load current character
+
+    ; Check for string terminators (newline, carriage return, space, null)
+    cmp dl, 10                      ; Is it newline?
     je .done
-    cmp dl, 13
+
+    cmp dl, 13                      ; Is it carriage return?
     je .done
-    cmp dl, 32
+
+    cmp dl, 32                      ; Is it space?
     je .done
-    test dl, dl     ; Null terminator check
+
+    test dl, dl                     ; Is it null terminator?
     jz .done
 
-    cmp dl, '0'
+
+    ; ---- Validate character is a digit ----
+
+    cmp dl, '0'                     ; Is character < '0'?
     jl .invalid
-    cmp dl, '9'
+
+    cmp dl, '9'                     ; Is character > '9'?
     jg .invalid
 
-    sub dl, '0'
-    imul rax, rax, 10
-    movzx rdx, dl
-    add rax, rdx
-    inc rcx
-    jmp .convert
+
+    ; ---- Add digit to result ----
+
+    sub dl, '0'                     ; Convert ASCII to digit value
+    imul rax, rax, 10               ; Multiply result by 10
+    movzx rdx, dl                   ; Zero-extend digit to 64-bit
+    add rax, rdx                    ; Add digit to result
+    inc rcx                         ; Move to next character
+    jmp .convert                    ; Continue parsing
+
+
+    ; ---- Error handling: invalid input ----
 
 .invalid:
-    mov rdi, 1      ; Set error flag
+    mov rdi, 1                      ; Set error flag
     jmp .exit
 
+
+    ; ---- Validation and sign application ----
+
 .done:
-    test rcx, rcx
-    jz .invalid
-    cmp r14, 1      ; Check our sign flag
-    jne .ok
-    neg rax
+    test rcx, rcx                   ; Was any character parsed?
+    jz .invalid                     ; If not, it's an error
+
+    cmp r14, 1                      ; Check sign flag
+    jne .ok                         ; If positive, we're done
+
+    neg rax                         ; If negative, negate the result
+
+
+    ; ---- Success: return with no error ----
+
 .ok:
-    xor rdi, rdi    ; success
+    xor rdi, rdi                    ; Clear error flag
+
+
+    ; ---- Exit function ----
+
 .exit:
-    pop r14         ; Restore r14
-    pop rbp         ; Restore rbp
+    pop r14                         ; Restore R14
+    pop rbp                         ; Restore RBP
     ret
 
-; PRINT_NUMBER - Print number in rax
-; Uses output_buffer exclusively
+
+; ============================================================
+; FUNCTION: PRINT_NUMBER
+; ============================================================
+; Purpose: Convert integer in RAX to decimal ASCII and print
+;
+; Input:   RAX = integer to print (can be negative)
+;
+; Output:  None (prints to stdout)
+;
+; Algorithm:
+;   1. Handle special case: zero
+;   2. Handle sign separately (print minus, work with absolute value)
+;   3. Extract digits using repeated division by 10
+;   4. Reverse digit sequence and print
+;
+; Register Preservation: Most registers (push/pop)
+; Working Registers: RCX (digit counter), RDX (remainder from division)
+;                    RBX (reverse counter), R14 (digit count)
+; ============================================================
 
 PRINT_NUMBER:
-    push r15   ;Dummy push for 16-byte alignment
+    push r15                        ; Dummy push for 16-byte stack alignment
     push rbx
     push rcx
     push rdx
     push rsi
     push rbp
-    push r14        ; Use R14 for length instead of RBP
-    push rax        ; Store the number to print (7 pushes + 1 for alignment later)
+    push r14                        ; R14 stores digit count
+    push rax                        ; Save original number
 
-    ; 1. Clear output_buffer
+
+    ; ---- Clear output buffer ----
+
     xor rax, rax
-    mov rcx, 8
+    mov rcx, 8                      ; Clear 8 qwords (64 bytes)
     lea rdi, [output_buffer]
-    rep stosq
+    rep stosq                       ; Fill with zeros
 
-    mov rax, [rsp]  ; Peek at the saved RAX
-    xor rcx, rcx
-    test rax, rax
-    jnz .check_sign
 
-    mov byte [output_buffer], '0'
+    ; ---- Check for zero ----
+
+    mov rax, [rsp]                  ; Retrieve saved number
+    xor rcx, rcx                    ; RCX = digit counter
+    test rax, rax                   ; Is the number zero?
+    jnz .check_sign                 ; No, check for negative
+
+
+    ; Special case: zero
+    mov byte [output_buffer], '0'   ; Place '0' in buffer
     mov rsi, output_buffer
-    mov rdx, 1
+    mov rdx, 1                      ; Write 1 byte
     jmp .do_syscall
 
-.check_sign:
-    jns .convert    ; If positive, jump straight to convert
-    
-    push rcx    ;Save your digit counter
-    mov byte [output_buffer + 63], '-'
-    mov rax, 1
-    mov rdi, 1
-    lea rsi, [output_buffer + 63]
-    mov rdx, 1
-    syscall         ; Print '-'
-    pop rcx  ;restore your digit counter
 
-    mov rax, [rsp]
-    neg rax         ; Make positive for conversion
+    ; ---- Check if negative ----
+
+.check_sign:
+    jns .convert                    ; If positive, skip to conversion
+
+
+    ; Handle negative number
+    push rcx                        ; Save digit counter
+    mov byte [output_buffer + 63], '-'  ; Place minus sign
+    mov rax, 1                      ; Syscall: write
+    mov rdi, 1                      ; File descriptor: stdout
+    lea rsi, [output_buffer + 63]   ; Address of minus sign
+    mov rdx, 1                      ; Write 1 byte
+    syscall                         ; Print minus sign
+
+    pop rcx                         ; Restore digit counter
+    mov rax, [rsp]                  ; Retrieve number again
+    neg rax                         ; Make positive for digit extraction
+
+
+    ; ---- Extract digits from right to left ----
 
 .convert:
-    mov rdi, 10
-.next:
-    xor rdx, rdx
-    div rdi
-    add dl, '0'
-    mov [output_buffer + rcx], dl
-    inc rcx
-    test rax, rax
-    jnz .next
+    mov rdi, 10                     ; Divisor = 10
 
-    mov r14, rcx    ; SAVE length in R14 (NOT RBP!)
-    xor rbx, rbx
+
+.next:
+    xor rdx, rdx                    ; Clear RDX (for division)
+    div rdi                         ; RAX / 10 -> quotient in RAX, remainder in RDX
+    add dl, '0'                     ; Convert remainder to ASCII digit
+    mov [output_buffer + rcx], dl   ; Store digit in buffer
+    inc rcx                         ; Increment digit counter
+    test rax, rax                   ; Is quotient zero? (all digits extracted?)
+    jnz .next                       ; No, continue extracting
+
+
+    ; ---- Reverse digits (they were stored backwards) ----
+
+    mov r14, rcx                    ; R14 = total digit count
+    xor rbx, rbx                    ; RBX = output position (starts at 0)
+
 
 .reverse_loop:
-    dec rcx
-    mov al, [output_buffer + rcx]
-    mov [output_buffer + rbx + 32], al
-    inc rbx
-    test rcx, rcx
-    jnz .reverse_loop
+    dec rcx                         ; Move backwards through extracted digits
+    mov al, [output_buffer + rcx]   ; Load digit
+    mov [output_buffer + rbx + 32], al  ; Store in reverse position (buffer offset 32)
+    inc rbx                         ; Move forward in output
+    test rcx, rcx                   ; Have we reversed all digits?
+    jnz .reverse_loop               ; No, continue reversing
 
-    lea rsi, [output_buffer + 32]
-    mov rdx, r14    ; Use saved length
+
+    ; ---- Prepare to print reversed digits ----
+
+    lea rsi, [output_buffer + 32]   ; Address of reversed digits
+    mov rdx, r14                    ; RDX = number of digits
+
+
+    ; ---- Print the number ----
 
 .do_syscall:
-    mov rax, 1
-    mov rdi, 1
+    mov rax, 1                      ; Syscall: write
+    mov rdi, 1                      ; File descriptor: stdout
     syscall
 
+
+    ; ---- Clean up and return ----
+
 .full_exit:
-    pop rax         ; Clean up the saved rax
+    pop rax                         ; Clean up saved RAX
     pop r14
     pop rbp
     pop rsi
     pop rdx
     pop rcx
     pop rbx
-    pop r15 ;Added Dummy pop 
+    pop r15                         ; Remove dummy alignment push
     ret
 
-;ADD_NUMBERS -Adds two numbers and checks for overflow
-;Input: rdi = First Number, rsi =Second number
-;Output: rax = Sum, r8 (or a flag) = Status
+
+; ============================================================
+; FUNCTION: ADD_NUMBERS
+; ============================================================
+; Purpose: Add two integers with overflow detection
+;
+; Input:   RDI = first number
+;          RSI = second number
+;
+; Output:  RAX = sum (if no overflow)
+;          Carry Flag = set if overflow occurred, clear if success
+;
+; Algorithm:
+;   - Perform addition: RAX = RDI + RSI
+;   - Check overflow flag (OF) set by the add operation
+;   - Set carry flag if overflow detected (for error signaling)
+;
+; Note: x86-64 'add' sets overflow flag when signed overflow occurs
+; ============================================================
+
 ADD_NUMBERS:
     push rbp
     mov rbp, rsp
 
-    mov rax, rdi
-    add rax, rsi
-    jo .overflow_detected
+    ; Perform addition and check for overflow
+    mov rax, rdi                    ; RAX = first number
+    add rax, rsi                    ; RAX += second number
+    jo .overflow_detected           ; Jump if overflow flag set
 
-    clc  ;Clear Carry/Error (Success)
+
+    ; ---- No overflow: return success ----
+
+    clc                             ; Clear carry flag (0 = success)
     jmp .done
 
+
+    ; ---- Overflow detected: signal error ----
+
 .overflow_detected:
-    stc  ;Set Carry Flag (Error)
+    stc                             ; Set carry flag (1 = error)
+
+
+    ; ---- Exit function ----
 
 .done:
     pop rbp
     ret
 
-INVALID_INPUT:
-    mov rsi, ERR_MSG
-    mov rdx, ERR_LEN
-    call PRINT_STRING
-    ; Clear the stack if necessary, or just ensure r8d is still valid 
-    jmp GAME_LOOP
 
-OVERFLOW_HANDLER:
-    mov rsi, OVERFLOW_MSG
-    mov rdx, OVERFLOW_LEN
-    call PRINT_STRING
-    mov rax, 60
-    mov rdi, 1
-    syscall
+; ============================================================
+; ERROR HANDLERS
+; ============================================================
+
+
+; ============================================================
+; HANDLER: INVALID_INPUT_HANDLER
+; ============================================================
+; Purpose: Handle invalid user input
+; Action:  Print error message and return to main loop
+; ============================================================
 
 INVALID_INPUT_HANDLER:
-    mov rsi, ERR_MSG
-    mov rdx, ERR_LEN
-    call PRINT_STRING
-    jmp GAME_LOOP
+    mov rsi, ERR_MSG                ; Error message address
+    mov rdx, ERR_LEN                ; Error message length
+    call PRINT_STRING               ; Print error
+    jmp GAME_LOOP                   ; Return to main loop for retry
 
-global ATOI_C_Wrapper
+
+; ============================================================
+; HANDLER: OVERFLOW_HANDLER
+; ============================================================
+; Purpose: Handle integer overflow detected during addition
+; Action:  Print overflow message and exit program with error code
+; ============================================================
+
+OVERFLOW_HANDLER:
+    mov rsi, OVERFLOW_MSG           ; Overflow message address
+    mov rdx, OVERFLOW_LEN           ; Overflow message length
+    call PRINT_STRING               ; Print error message
+
+    ; Exit with error code
+    mov rax, 60                     ; Syscall: exit
+    mov rdi, 1                      ; Exit code: 1 (error)
+    syscall
+
+
+; ============================================================
+; C WRAPPER FUNCTIONS
+; ============================================================
+; These functions allow the assembly code to be called from C
+; They adapt C's calling convention to our assembly conventions
+
+
+; ============================================================
+; FUNCTION: ATOI_C_Wrapper
+; ============================================================
+; Purpose: C-compatible wrapper for ATOI_testable
+;
+; C Calling Convention:
+;   Input:  RDI = string pointer (from C)
+;   Output: RAX = result (returned to C)
+;
+; Conversion:
+;   C passes first arg in RDI, but ATOI expects it in RSI
+;   So we move RDI -> RSI before calling ATOI_testable
+; ============================================================
+
 ATOI_C_Wrapper:
-    mov rsi, rdi  ;Move C's 1st arg (rdi) to your 1st arg (rsi)
-    call ATOI_testable
-    ; RAX already conatins the result for C to read 
+    mov rsi, rdi                    ; Move C's first arg (RDI) to our convention (RSI)
+    call ATOI_testable              ; Call ATOI function
+    ; RAX already contains result for C to read
     ret
 
-global test_add_wrapper
+
+; ============================================================
+; FUNCTION: test_add_wrapper
+; ============================================================
+; Purpose: C-compatible wrapper for ADD_NUMBERS
+;
+; C Calling Convention:
+;   Input:  RDI = first number, RSI = second number
+;   Output: RAX = sum (if success), -999 (if overflow)
+;
+; Note: C's convention already passes args in RDI, RSI
+;       so we just need to check carry flag and convert to error code
+; ============================================================
+
 test_add_wrapper:
-    mov rdi, rdi ;1st arg (C passes in rdi)
-    mov rsi, rsi ;2nd arg (C passes in rsi)
-    call ADD_NUMBERS
-    jc .err 
-    ;rax already has the sum 
-    ret 
+    mov rdi, rdi                    ; First arg (C passes in RDI) - already in place
+    mov rsi, rsi                    ; Second arg (C passes in RSI) - already in place
+    call ADD_NUMBERS                ; Call addition function
+    jc .err                         ; Jump if carry flag set (error)
 
-.err:
-    mov rax, -999 ;Special error code for C to catch
+    ; Success: RAX already contains sum
     ret
 
-;This tells the linker that your stack should not be executable (standard security practice)
+
+    ; Error case: return special error code
+.err:
+    mov rax, -999                   ; Return -999 to signal error to C
+    ret
+
+
+; ============================================================
+; LINKER DIRECTIVES & SECURITY SETTINGS
+; ============================================================
+
+; This section tells the linker that the stack should NOT be executable
+; This is a standard security practice that prevents stack-based code execution attacks
 section .note.GNU-stack noalloc noexec nowrite progbits
